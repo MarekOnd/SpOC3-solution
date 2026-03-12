@@ -1,0 +1,12 @@
+{
+    "path": "data/test",
+    "plot_dim": 5,
+    "max_cmds": 100,
+    "num_cubes": 3,
+    "num_cube_types": 2,
+    "fitness_offset": 0.66,
+    "colours": [
+        "lightgray",
+        "limegreen"
+    ]
+}
