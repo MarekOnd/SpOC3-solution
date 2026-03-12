@@ -158,7 +158,64 @@ class programmable_cubes_UDP:
         ax.set_facecolor('white')
         for i in range(len(cube_type_to_plot)):
             ax.voxels(cube_tensor[i], facecolor = self.setup['colours'][cube_type_to_plot[i]], edgecolors = 'k', alpha=.4)
+        ax.set_aspect("equal")
+        plt.tight_layout()
+        plt.show() 
+
+    def debug_plot(self, which_one, cube_type_to_plot = [0], custom_config = None, custom_cube_types = None):
+        '''
+        Plot function with debug colors and options
+        '''
+        if which_one == 'ensemble':
+            assert(self.final_cube_positions is not None)
+            positions = self.final_cube_positions
+            cube_types = self.initial_cube_types    
+        if which_one == 'target':
+            positions = self.target_cube_positions
+            cube_types = self.target_cube_types
+        if custom_config is not None:
+            positions = custom_config
+        if custom_cube_types is not None:
+            cube_types = custom_cube_types
+
         
+        cube_tensor = np.zeros((len(cube_type_to_plot),  
+                                self.setup['plot_dim'], 
+                                self.setup['plot_dim'], 
+                                self.setup['plot_dim']))
+        offset = int(np.fabs(np.min(positions)))
+
+        for l in range(len(cube_type_to_plot)):
+            for pos in positions[cube_types == cube_type_to_plot[l]]:
+                i,j,k = pos
+                cube_tensor[l][i+offset][j+offset][k+offset] = 1
+        # Debug voxels
+        DEBUG_OPTIONS = 3
+        debug_cube_tensor = np.zeros((DEBUG_OPTIONS,  
+                                self.setup['plot_dim'], 
+                                self.setup['plot_dim'], 
+                                self.setup['plot_dim']))
+        offset = int(np.fabs(np.min(positions)))
+        for l in range(DEBUG_OPTIONS):
+            if l == 0: # skip zero
+                continue
+            for pos in positions[cube_types == -l]:
+                i,j,k = pos
+                debug_cube_tensor[l][i+offset][j+offset][k+offset] = 1
+        DEBUG_COLOURS = ["purple","red","black"]
+
+        
+        fig = plt.figure()
+        ax = plt.axes(projection='3d')
+        ax.set_facecolor('white')
+        for i in range(len(cube_type_to_plot)):
+            ax.voxels(cube_tensor[i], facecolor = self.setup['colours'][cube_type_to_plot[i]], edgecolors = 'k', alpha=.4)
+        
+        # Show debug voxels
+        for i in range(DEBUG_OPTIONS):
+            ax.voxels(debug_cube_tensor[i], facecolor = DEBUG_COLOURS[i], edgecolors = 'k', alpha=.4)
+        
+        ax.set_aspect("equal")
         plt.tight_layout()
         plt.show()   
 

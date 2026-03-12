@@ -1,0 +1,11 @@
+{
+    "path": "data/WALL",
+    "plot_dim": 15,
+    "max_cmds": 1000,
+    "num_cubes": 101,
+    "num_cube_types": 1,
+    "fitness_offset": 0.0,
+    "colours": [
+        "lightgray"
+    ]
+}
