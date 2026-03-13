@@ -16,7 +16,11 @@ import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 from matplotlib.animation import FuncAnimation, PillowWriter
-
+try:
+	from tqdm import tqdm
+except Exception:
+	def tqdm(x, **kwargs):
+		return x
 from programmable_cubes_UDP import programmable_cubes_UDP, ProgrammableCubes
 
 
@@ -36,7 +40,7 @@ def _coords_to_dense(positions, plot_dim, shift):
 	return grid
 
 
-def generate_gif_from_chromosome(chromosome, problem_name, out_path='animation.gif', interval=500, dpi=100, cube_types_to_plot=None, skip=100, max_frames=100):
+def generate_gif_from_chromosome(chromosome, problem_name, out_path='animation.gif', interval=500, dpi=100, cube_types_to_plot=None, framecnt=100):
 	"""Apply `chromosome` step-by-step and save a GIF of the ensemble reconfiguration.
 
 	Args:
@@ -63,8 +67,11 @@ def generate_gif_from_chromosome(chromosome, problem_name, out_path='animation.g
 	else:
 		chrom_end = int(len(chrom) // 2)
 
+	skip = np.floor(chrom_end/framecnt)
+	if skip == 0:
+		skip = 1
 	legal_count = 0
-	for i in range(chrom_end):
+	for i in tqdm(range(chrom_end), desc='Applying moves', unit='move'):
 		cube_id = int(chrom[2 * i])
 		move = int(chrom[2 * i + 1])
 		# apply single update; record only when legal (move applied)
@@ -75,7 +82,7 @@ def generate_gif_from_chromosome(chromosome, problem_name, out_path='animation.g
 				frames.append(cubes.cube_position.copy())
 
 	# Prepare plotting parameters
-	plot_dim = udp.setup.get('plot_dim', 20)
+	plot_dim = udp.setup.get('plot_dim', 50)
 	if cube_types_to_plot is None:
 		cube_types_to_plot = list(np.unique(udp.initial_cube_types))
 
@@ -83,9 +90,9 @@ def generate_gif_from_chromosome(chromosome, problem_name, out_path='animation.g
 	cube_types = np.array(udp.initial_cube_types)
 
 	# If we have too many frames, downsample uniformly to max_frames
-	if max_frames is not None and len(frames) > max_frames:
-		idx = np.linspace(0, len(frames) - 1, max_frames, dtype=int)
-		frames = [frames[i] for i in idx]
+	#if max_frames is not None and len(frames) > max_frames:
+	#	idx = np.linspace(0, len(frames) - 1, max_frames, dtype=int)
+	#	frames = [frames[i] for i in idx]
 
 	# Build animation using FuncAnimation and save with PillowWriter (gif)
 	fig = plt.figure(figsize=(6, 6))
@@ -129,6 +136,7 @@ if __name__ == '__main__':
 	p = argparse.ArgumentParser(description='Generate GIF from chromosome for Programmable Cubes')
 	p.add_argument('problem', help='Problem name (folder in problems/), e.g. ISS')
 	p.add_argument('chromosome', help='Path to a .npy file containing the chromosome (or a comma-separated list)')
+	p.add_argument('--framecnt', '-fcnt', default=100, help='How many frames to have')
 	p.add_argument('--out', '-o', default='animation.gif', help='Output GIF path')
 	p.add_argument('--interval', type=int, default=100, help='Frame interval in ms')
 	args = p.parse_args()
