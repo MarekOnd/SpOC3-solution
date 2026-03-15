@@ -213,7 +213,7 @@ class programmable_cubes_UDP:
         
         # Show debug voxels
         for i in range(DEBUG_OPTIONS):
-            ax.voxels(debug_cube_tensor[i], facecolor = DEBUG_COLOURS[i], edgecolors = 'k', alpha=.4)
+            ax.voxels(debug_cube_tensor[i], facecolor = DEBUG_COLOURS[i], edgecolors = 'k', alpha=.1)
         
         ax.set_aspect("equal")
         plt.tight_layout()
@@ -489,6 +489,12 @@ class ProgrammableCubes:
             neighs, surrs = get_surrounding_cubes(self.cube_position[i], self.cube_position)
             self.cube_surroundings.append(surrs)
             self.cube_neighbours.append(neighs)
+
+    def reset_at_id(self,id,new_position):
+        self.cube_position[id] = np.array(new_position)
+        new_neighs, new_surrs = get_surrounding_cubes(self.cube_position[id], self.cube_position)
+        update_ensemble(id, self.cube_surroundings, new_surrs)
+        update_ensemble(id, self.cube_neighbours, new_neighs)
         
     def apply_single_update_step(self, cube_to_move, move_to_use, step = '', verbose = False):
         '''
@@ -550,6 +556,22 @@ class ProgrammableCubes:
                 print('{} -- Cannot apply move {} to cube {}. Cube is connecting. Skipping command...'.format(step, move_to_use, cube_to_move))
             return 0
                 
+    def apply_update_at_position(self, cube_to_move, new_position):
+        """
+        Similar to apply_single_update_step but moves to arbitrary new position and updates surrounding and neighbours.
+        """
+        # Assign new position
+        self.cube_position[cube_to_move] = np.array(new_position)
+
+        # Recompute surrounding and neighbouring cubes for the moved cube
+        new_neighbouring_cubes, new_surrounding_cubes = get_surrounding_cubes(self.cube_position[cube_to_move], self.cube_position)
+
+        # Update surroundings and neighbours in place
+        update_ensemble(cube_to_move, self.cube_surroundings, new_surrounding_cubes)
+        update_ensemble(cube_to_move, self.cube_neighbours, new_neighbouring_cubes)
+
+        return 1
+
     def apply_chromosome(self, chromosome, verbose):
         '''
         Given a chromosome, execute the command sequence encoded in it until
