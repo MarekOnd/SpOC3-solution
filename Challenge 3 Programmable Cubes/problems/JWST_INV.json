@@ -1,0 +1,16 @@
+{
+    "path": "data/JWST_INV",
+    "plot_dim": 30,
+    "max_cmds": 30000,
+    "num_cubes": 643,
+    "num_cube_types": 6,
+    "fitness_offset": 0.3001555209953344,
+    "colours": [
+        "snow",
+        "midnightblue",
+        "silver",
+        "k",
+        "gold",
+        "plum"
+    ]
+}

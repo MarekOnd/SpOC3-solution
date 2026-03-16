@@ -47,7 +47,7 @@ def force_random_move(id:int,cubes:ProgrammableCubes,rand : int = 0) -> int:
             return i
     return -1
 
-DIRS = [[1,0,0],[-1,0,0],[0,1,0],[0,-1,0],[0,0,1],[0,0,-1]]
+DIRS = np.array([[1,0,0],[-1,0,0],[0,1,0],[0,-1,0],[0,0,1],[0,0,-1]])
 def is_connected(c:np.ndarray,positions:np.ndarray):
     """ Checks if there is at least one cube in some direction """
     # Target one has to be empty
@@ -125,6 +125,21 @@ def pair_colours(wi:np.ndarray,wt:np.ndarray,ci:np.ndarray,ti:np.ndarray,ct:np.n
                     pairs[j,1] = tmp_id
                     pairs[j,3] = tmp_type
                     break
+    return pairs
+
+def pair_shuffled(wi:np.ndarray,wt:np.ndarray,ci:np.ndarray,ti:np.ndarray,ct:np.ndarray,tt:np.ndarray):
+    """ 
+    pairs based on colours, does not consider distance
+    """
+    pairs = np.zeros(shape=(len(wi),4),dtype=np.int64)
+    if not wi.size > 0:
+        return pairs
+    shuffled_wt = wt.copy()
+    random.shuffle(shuffled_wt)
+    pairs[:,0] = wi
+    pairs[:,1] = shuffled_wt
+    pairs[:,2] = ti[wi]
+    pairs[:,3] = tt[shuffled_wt]
     return pairs
 
 
@@ -409,7 +424,7 @@ def axis_search_always_move(cubes : ProgrammableCubes, id:int, c:np.ndarray, bud
 
 ## Final function for finding chromosomes
 
-def find_chromosome(udp:programmable_cubes_UDP,pairing : callable = pair_colours, pathfinding=axis_search,random_shuffle=False):
+def find_chromosome(udp:programmable_cubes_UDP,pairing : callable = pair_colours, pathfinding=astar_cubes,random_shuffle=False):
     # Initialize cubes
     cubes = ProgrammableCubes(udp.final_cube_positions)
     ti = udp.initial_cube_types
@@ -450,7 +465,7 @@ def find_chromosome(udp:programmable_cubes_UDP,pairing : callable = pair_colours
             end = ct[src_dest[1]]
             if not is_connected(end,cubes.cube_position):
                 continue
-            tmp_chrom,tmp_path,success = pathfinding(cubes,id,end,50)
+            tmp_chrom,tmp_path,success = pathfinding(cubes,id,end)
             if success:
                 chrom.extend(tmp_chrom)
                 # Apply to cubes
@@ -462,11 +477,13 @@ def find_chromosome(udp:programmable_cubes_UDP,pairing : callable = pair_colours
 
         # Experiment: let all wrong cubes move 1 time randomly
         # results from few runs: overall improves fitness, maybe increases num of steps at start but helps in the end
-        # wi, wt = get_wrong_cube_ids(cubes.cube_position,ct)
-        # for id in wi:
-        #     move = force_random_move(id,cubes)
-        #     if move != -1:
-        #         chrom.extend([id,move])
+        if random_shuffle:
+            print("shuffling randomly")
+            wi, wt = get_wrong_cube_ids(cubes.cube_position,ct)
+            for id in wi:
+                move = force_random_move(id,cubes)
+                if move != -1:
+                     chrom.extend([id,move])
 
         iter += 1
         mistakes_cnt = len(wi)+len(wrong_type_ids)
@@ -475,7 +492,20 @@ def find_chromosome(udp:programmable_cubes_UDP,pairing : callable = pair_colours
         print(f"mistakes:{len(wi)}+{len(wrong_type_ids)} budget status: {len(chrom)/udp.get_nix()*100} % used, escape:{iter/ESCAPE*100}% successes: {successes}")
     return np.array(chrom,dtype=int)
 
+def filter_impossible_moves(udp:programmable_cubes_UDP,chromosome):
+    udp.fitness(np.array([-1]))
+    cubes = ProgrammableCubes(udp.final_cube_positions)
 
+    filtered_chromosome = []
+
+    for i in range(int(len(chromosome)/2)):
+        cube_id = chromosome[i*2]
+        move = chromosome[i*2+1]
+        done = cubes.apply_single_update_step(cube_id, move)
+        # done is 1 if the move is legal and 0 otherwise
+        if done == 1:
+            filtered_chromosome += [cube_id, move]
+    return np.array(filtered_chromosome,dtype=int)
 def format_chromosome(udp:programmable_cubes_UDP,chromosome):
     """ From tutorial 1"""
     udp.fitness(np.array([-1]))
@@ -512,8 +542,8 @@ def invert_chromosome(udp:programmable_cubes_UDP,chromosome):
     """
     inv_chromosome = []
     # extract moves and ids
-    moves = chromosome[::-2]
-    ids = chromosome[(len(chromosome)-2)::-2]
+    moves = np.array(chromosome[::-2],dtype=int)
+    ids = np.array(chromosome[(len(chromosome)-2)::-2],dtype=int)
     # invert rotations
     moves = [inv_rot(moves[i]) for i in range(len(moves))]
     # convert ids
@@ -529,19 +559,21 @@ def invert_chromosome(udp:programmable_cubes_UDP,chromosome):
         id = contains_coord(achieved_config,coord)
         if id != -1:
             id_conversion[id] = i
-            avail_ids_achieved_config[i] = False
-            avail_ids_target_config[id] = False
+            avail_ids_achieved_config[id] = False
+            avail_ids_target_config[i] = False
     # randomly match the other cubes
     for i in np.arange(len(target_config)):
-        for j in np.arange(i,len(target_config)):
-            if avail_ids_achieved_config[i] and avail_ids_target_config[j]:
+        if not avail_ids_achieved_config[i]:
+            continue
+        for j in np.arange(len(target_config)):
+            if avail_ids_target_config[j]:
                 id_conversion[i] = j
                 avail_ids_achieved_config[i] = False
                 avail_ids_target_config[j] = False
                 break
-    #print(id_conversion)
-    #print(ids)
-    ids = [id_conversion[id] for id in ids]
+    print(id_conversion)
+    print(ids)
+    ids = [id_conversion.get(int(id)) for id in ids]
     #print(ids)
     #print(moves)
     # 
@@ -549,3 +581,186 @@ def invert_chromosome(udp:programmable_cubes_UDP,chromosome):
     inv_chromosome = np.array(inv_chromosome).flatten()
     return inv_chromosome
 
+def find_chromosome_heuristic(udp:programmable_cubes_UDP, random_shuffle = False):
+    """ 
+    Idea:
+    mark indices at wrong places and with wrong types only once
+    try to move the closest
+    extend to further apart
+    
+    """
+    # Initialize cubes
+    cubes = ProgrammableCubes(udp.final_cube_positions)
+    ti = udp.initial_cube_types
+    ci = udp.final_cube_positions
+    ct = udp.target_cube_positions
+    tt = udp.target_cube_types
+    types = np.arange(np.max(ti)+1)
+
+    # Initialize outputs
+    chrom = []
+    iter = 0
+    successes = 0
+
+    # These are part of the structure but with wrong type => need to be moved to allow others move in
+    wti = have_wrong_type(cubes.cube_position,ti,ct,tt)
+    # wti - wrong type ids, from cube_position
+    # These are cubes away from the structure and the hollow points in the structure
+    wpi, epi = get_wrong_cube_ids(cubes.cube_position,ct)
+    # wpi - wrong place ids, from cube_position
+    # epi - empty place ids, from target configuration ct
+
+    if len(wti) == 0:
+        wti = np.array([], dtype=int)
+    if len(epi) == 0:
+        epi = np.array([], dtype=int)
+    if len(wpi) == 0:
+        wpi = np.array([], dtype=int)
+    np.random.shuffle(wti)
+    np.random.shuffle(wpi)
+    np.random.shuffle(epi)
+    
+
+    empty_coords = ct[epi]
+    empty_coords_types = tt[epi]
+
+    if random_shuffle:
+        for id in range(len(ti)):
+            move = force_random_move(id,cubes,id)
+            if move != -1:
+                chrom.extend([id,move])
+
+    
+
+    # Step 1: move wti to epi
+    #print(wti,wpi)
+    for id in wti:
+        empty_coords_with_correct_type = empty_coords[empty_coords_types==ti[id]]
+        start = np.array(cubes.cube_position[id])
+        tmp_chrom, tmp_path, success = dijkstra_cubes_multiple(cubes,id,empty_coords_with_correct_type,500)
+        if success:
+            chrom.extend(tmp_chrom)
+            cubes.apply_chromosome(np.concatenate([tmp_chrom,[-1]]),True)
+            end = tmp_path[tmp_path.shape[0]-1]
+            end_id = contains_coord(empty_coords,end)
+            empty_coords = np.delete(empty_coords,end_id,0)
+            empty_coords_types = np.delete(empty_coords_types,end_id,0)
+            successes += 1
+
+    # Step 2: move move wpi to epi (TODO or wti)
+    for id in wpi:
+        empty_coords_with_correct_type = empty_coords[empty_coords_types==ti[id]]
+
+        start = np.array(cubes.cube_position[id])
+        tmp_chrom, tmp_path, success = dijkstra_cubes_multiple(cubes,id,empty_coords_with_correct_type,500)
+        if success:
+            chrom.extend(tmp_chrom)
+            cubes.apply_chromosome(np.concatenate([tmp_chrom,[-1]]),True)
+            end = tmp_path[tmp_path.shape[0]-1]
+            end_id = contains_coord(empty_coords,end)
+            empty_coords = np.delete(empty_coords,end_id,0)
+            empty_coords_types = np.delete(empty_coords_types,end_id,0)
+            successes += 1
+
+    print(f"mistakes:{len(wpi)}+{len(wti)} budget status: {len(chrom)/udp.get_nix()*100} % used, successes: {successes}")
+    return np.array(chrom,dtype=int)
+
+def analyze_first_and_second_mistakes(udp,chrom):
+    cubes = ProgrammableCubes(udp.final_cube_positions)
+    ti = udp.initial_cube_types
+    ci = udp.final_cube_positions
+    ct = udp.target_cube_positions
+    tt = udp.target_cube_types
+    types = np.arange(np.max(ti)+1)
+    wti = have_wrong_type(cubes.cube_position,ti,ct,tt)
+    wpi, epi = get_wrong_cube_ids(cubes.cube_position,ct)
+    if len(wti) == 0:
+        wti = np.array([], dtype=int)
+    if len(epi) == 0:
+        epi = np.array([], dtype=int)
+    if len(wpi) == 0:
+        wpi = np.array([], dtype=int)
+    print(f"mistakes:{len(wpi)}+{len(wti)} budget status: {len(chrom)/udp.get_nix()*100} % used")
+
+def is_stuck(cubes,id):
+    return get_valid_rots(id,cubes) == []
+        
+
+def get_stuck_wrong_cubes(cubes,wrong_ids):
+    stuck_ids = []
+    for id in wrong_ids:
+        if is_stuck(cubes,id):
+            stuck_ids.append(id)
+    return np.array(stuck_ids)
+
+def get_freeroaming_cubes(cubes:ProgrammableCubes,ids):
+    """
+    
+    """
+    freeroaming_ids = []
+    for id in ids:
+        if len(cubes.cube_neighbours[id]) == 1:
+            freeroaming_ids.append(id)
+    return np.array(freeroaming_ids)
+
+
+def get_wrong_ids_and_coords(udp):
+    """
+    TODO:
+    it is like wrong cube ids and have wrong type combined
+    """
+    ti = udp.initial_cube_types
+    ci = udp.final_cube_positions
+    ct = udp.target_cube_positions
+    tt = udp.target_cube_types
+    wti = have_wrong_type(ci,ti,ct,tt)
+    # wti - wrong type ids, from cube_position
+    # These are cubes away from the structure and the hollow points in the structure
+    wpi, epi = get_wrong_cube_ids(ci,ct)
+    if len(wti) == 0:
+        wti = np.array([], dtype=int)
+    if len(epi) == 0:
+        epi = np.array([], dtype=int)
+    if len(wpi) == 0:
+        wpi = np.array([], dtype=int)
+    # wpi - wrong place ids, from cube_position
+    # epi - empty place ids, from target configuration ct
+
+    wrong_ids_initial = np.concatenate([wti,wpi])
+    coordinates_initial = np.concatenate([ct[wti],ct[wpi]])
+    #debug_types_initial = -np.ones(shape=(coordinates_initial.shape[0]),dtype=int)
+    wrong_ids_target = np.concatenate([wti,epi])
+    coordinates_target = np.concatenate([ct[epi],ct[wti]])
+    #debug_types_target = -2*np.ones(shape=(coordinates_target.shape[0]),dtype=int)
+    #all_coords =np.concatenate([coordinates_initial,coordinates_target])
+    #all_types = np.concatenate([debug_types_initial,debug_types_target])
+    
+    return wrong_ids_initial,wrong_ids_target
+
+def have_wrong_type_ids_from_udp(udp):
+    """
+    
+    """
+    ti = udp.initial_cube_types
+    ci = udp.final_cube_positions
+    ct = udp.target_cube_positions
+    tt = udp.target_cube_types
+    wti = have_wrong_type(ci,ti,ct,tt)
+    # wti - wrong type ids, from cube_position
+    # These are cubes away from the structure and the hollow points in the structure
+    wpi, epi = get_wrong_cube_ids(ci,ct)
+    if len(wti) == 0:
+        wti = np.array([], dtype=int)
+    if len(epi) == 0:
+        epi = np.array([], dtype=int)
+    if len(wpi) == 0:
+        wpi = np.array([], dtype=int)
+    # wpi - wrong place ids, from cube_position
+    # epi - empty place ids, from target configuration ct
+
+    wrong_ids_initial = np.concatenate([wti,wpi])
+    coordinates_initial = np.concatenate([ct[wti],ct[wpi]])
+    wrong_ids_target = np.concatenate([wti,epi])
+    coordinates_target = np.concatenate([ct[epi],ct[wti]])
+    
+    return wti,wpi

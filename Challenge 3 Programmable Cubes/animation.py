@@ -146,6 +146,6 @@ if __name__ == '__main__':
 	if os.path.exists(chrom_input):
 		chrom = np.load(chrom_input)
 	else:
-		chrom = np.array([int(x) for x in chrom_input.split(',')], dtype=int)
+		chrom = np.array([x for x in chrom_input.split(',')], dtype=int)
 
 	generate_gif_from_chromosome(chrom, args.problem, out_path=args.out, interval=args.interval)
