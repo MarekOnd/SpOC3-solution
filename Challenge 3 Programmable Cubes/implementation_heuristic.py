@@ -196,11 +196,12 @@ def astar_cubes(cubes : ProgrammableCubes, id : int, end : np.ndarray, budget : 
 
     while len(positions_to_search) > 0:
         value, current_pos = heappop(positions_to_search)
-        
         # goal check
         if np.sum(np.abs(current_pos-end)) == 0:
             cubes.apply_update_at_position(id,start) # return to original state
-            return rotations_to_chromosome(id,reconstruct_rotations(parents,end)),reconstruct_path(parents,end),True
+            chrom = rotations_to_chromosome(id,reconstruct_rotations(parents,end))
+            path = reconstruct_path(parents,end)
+            return chrom,path,True
         
 
         # Escape when too many iterations
@@ -408,7 +409,7 @@ def axis_search_always_move(cubes : ProgrammableCubes, id:int, c:np.ndarray, bud
 
 ## Final function for finding chromosomes
 
-def find_chromosome(udp:programmable_cubes_UDP,pairing : callable = pair_colours, pathfinding=axis_search):
+def find_chromosome(udp:programmable_cubes_UDP,pairing : callable = pair_colours, pathfinding=axis_search,random_shuffle=False):
     # Initialize cubes
     cubes = ProgrammableCubes(udp.final_cube_positions)
     ti = udp.initial_cube_types
@@ -504,4 +505,47 @@ def format_chromosome(udp:programmable_cubes_UDP,chromosome):
 
 def end_chromosome(chromosome):
     return np.concatenate([chromosome,np.array([-1])])
+
+def invert_chromosome(udp:programmable_cubes_UDP,chromosome):
+    """
+    expect even length 1D array
+    """
+    inv_chromosome = []
+    # extract moves and ids
+    moves = chromosome[::-2]
+    ids = chromosome[(len(chromosome)-2)::-2]
+    # invert rotations
+    moves = [inv_rot(moves[i]) for i in range(len(moves))]
+    # convert ids
+    # i is from target, id is from achieved, id -> i
+    # udp is the inverse problem
+    achieved_config = udp.final_cube_positions
+    avail_ids_achieved_config = np.ones(shape=len(achieved_config),dtype=bool)
+    target_config = udp.target_cube_positions
+    avail_ids_target_config = np.ones(shape=len(achieved_config),dtype=bool)
+    id_conversion = {}
+    for i in np.arange(len(target_config)):
+        coord = target_config[i]
+        id = contains_coord(achieved_config,coord)
+        if id != -1:
+            id_conversion[id] = i
+            avail_ids_achieved_config[i] = False
+            avail_ids_target_config[id] = False
+    # randomly match the other cubes
+    for i in np.arange(len(target_config)):
+        for j in np.arange(i,len(target_config)):
+            if avail_ids_achieved_config[i] and avail_ids_target_config[j]:
+                id_conversion[i] = j
+                avail_ids_achieved_config[i] = False
+                avail_ids_target_config[j] = False
+                break
+    #print(id_conversion)
+    #print(ids)
+    ids = [id_conversion[id] for id in ids]
+    #print(ids)
+    #print(moves)
+    # 
+    inv_chromosome = [[ids[i],moves[i]] for i in range(len(moves))]
+    inv_chromosome = np.array(inv_chromosome).flatten()
+    return inv_chromosome
 
