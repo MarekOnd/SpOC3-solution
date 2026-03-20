@@ -13,7 +13,8 @@ import matplotlib.pyplot as plt
 ############################################################################################################################################
 
 class programmable_cubes_UDP:
-    def __init__(self, problem):
+    prefix = ""
+    def __init__(self, problem, prefix=""):
         """
         A Pygmo compatible UDP User Defined Problem representing the Programmable Cubes challenge for SpOC 2024.
         https://esa.github.io/pygmo2/tutorials/coding_udp_simple.html explains more details on UDPs.
@@ -23,16 +24,17 @@ class programmable_cubes_UDP:
         """
         # Variable name used for storing cube ensemble configuration after chromosome evaluation
         self.final_cube_positions = None
+        self.prefix = prefix
 
         # Load specifications of the problem
-        with open('problems/{}.json'.format(problem), 'r') as infile:
+        with open('{}problems/{}.json'.format(prefix,problem), 'r') as infile:
             self.setup = json.load(infile)
 
         # Load target cube locations and cube types
-        self.target_cube_positions = np.load('{}/Target_Config.npy'.format(self.setup['path']))
-        self.target_cube_types = np.load('{}/Target_Cube_Types.npy'.format(self.setup['path']))
+        self.target_cube_positions = np.load(prefix + '{}/Target_Config.npy'.format(self.setup['path']))
+        self.target_cube_types = np.load(prefix + '{}/Target_Cube_Types.npy'.format(self.setup['path']))
         # Load cube types of initial configuration
-        self.initial_cube_types = np.load('{}/Initial_Cube_Types.npy'.format(self.setup['path']))
+        self.initial_cube_types = np.load(prefix + '{}/Initial_Cube_Types.npy'.format(self.setup['path']))
    
     def get_bounds(self):
         """
@@ -96,7 +98,7 @@ class programmable_cubes_UDP:
         # Note: we do not check here whether a custom cube configuration is valid 
         # (i.e., whether all cubes are connected with each other).
         if initial_configuration is None:
-            initial_configuration = np.load('{}/Initial_Config.npy'.format(self.setup['path']))
+            initial_configuration = np.load(self.prefix + '{}/Initial_Config.npy'.format(self.setup['path']))
 
         # Create the cube ensemble with an initial cube configuration.
         cubes = ProgrammableCubes(initial_configuration)
