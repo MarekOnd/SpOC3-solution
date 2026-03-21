@@ -14,7 +14,7 @@ def debug_plot(udp:programmable_cubes_UDP):
     ct = udp.target_cube_positions
     tt = udp.target_cube_types
     types = np.arange(np.max(ti)+1)
-    wti = have_wrong_type(ci,ti,ct,tt)
+    wti, wtt = have_wrong_type(ci,ti,ct,tt)
     # wti - wrong type ids, from cube_position
     # These are cubes away from the structure and the hollow points in the structure
     wpi, epi = get_wrong_cube_ids(ci,ct)
@@ -51,7 +51,7 @@ def save_mistakes(udp:programmable_cubes_UDP):
     ci = udp.final_cube_positions
     ct = udp.target_cube_positions
     tt = udp.target_cube_types
-    wti = have_wrong_type(ci,ti,ct,tt)
+    wti, wtt = have_wrong_type(ci,ti,ct,tt)
     wpi, epi = get_wrong_cube_ids(ci,ct)
     if len(wti) == 0:
         wti = np.array([], dtype=int)
@@ -59,9 +59,11 @@ def save_mistakes(udp:programmable_cubes_UDP):
         epi = np.array([], dtype=int)
     if len(wpi) == 0:
         wpi = np.array([], dtype=int)
+    if len(wtt) == 0:
+        wtt = np.array([], dtype=int)
 
-    coordinates_initial = np.concatenate([ct[wti],ci[wpi]])
-    coordinates_target = np.concatenate([ct[epi],ct[wti]])
+    coordinates_initial = np.concatenate([ct[wtt],ci[wpi]])
+    coordinates_target = np.concatenate([ct[epi],ct[wtt]])
     all_coords =np.concatenate([coordinates_initial,coordinates_target])
     
     np.save(f"out_wrong",all_coords)

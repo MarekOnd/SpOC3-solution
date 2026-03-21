@@ -71,17 +71,19 @@ def is_connected(c:np.ndarray,positions:np.ndarray):
 
 def contains_coord(arr:np.ndarray, coord:np.ndarray):
     for id,c in enumerate(arr):
-        if np.sum(c==coord) == len(coord):
+        if tuple(c) == tuple(coord):
             return id
     return -1
 
 def have_wrong_type(pos1,type1,pos2,type2):
-    wrong_type_ids = []
+    wrong_type_ids1 = []
+    wrong_type_ids2 = []
     for i in np.arange(len(pos1)):
         id = contains_coord(pos2,pos1[i])
         if id != -1 and type1[i] != type2[id]:
-            wrong_type_ids.append(i)
-    return wrong_type_ids
+            wrong_type_ids1.append(i)
+            wrong_type_ids2.append(id)
+    return np.array(wrong_type_ids1,dtype=int), np.array(wrong_type_ids2,dtype=int)
 
 def get_wrong_cube_ids(pos1:np.ndarray,pos2:np.ndarray):
     """
@@ -105,14 +107,14 @@ def get_wrong_cube_ids(pos1:np.ndarray,pos2:np.ndarray):
 
     return pos1_ids,pos2_ids
 
-def analyze_first_and_second_mistakes(udp):
+def get_first_and_second_mistakes(udp):
     cubes = ProgrammableCubes(udp.final_cube_positions)
     ti = udp.initial_cube_types
     ci = udp.final_cube_positions
     ct = udp.target_cube_positions
     tt = udp.target_cube_types
     types = np.arange(np.max(ti)+1)
-    wti = have_wrong_type(cubes.cube_position,ti,ct,tt)
+    wti, wtt = have_wrong_type(cubes.cube_position,ti,ct,tt)
     wpi, epi = get_wrong_cube_ids(cubes.cube_position,ct)
     if len(wti) == 0:
         wti = np.array([], dtype=int)
@@ -120,6 +122,10 @@ def analyze_first_and_second_mistakes(udp):
         epi = np.array([], dtype=int)
     if len(wpi) == 0:
         wpi = np.array([], dtype=int)
+
+    return wpi, wti
+def analyze_first_and_second_mistakes(udp):
+    wpi, wti = get_first_and_second_mistakes(udp)
     return f"mistakes:{len(wpi)}+{len(wti)}"
 
 def is_stuck(cubes,id):
@@ -153,7 +159,7 @@ def get_wrong_ids_and_coords(udp:programmable_cubes_UDP):
     ci = udp.final_cube_positions
     ct = udp.target_cube_positions
     tt = udp.target_cube_types
-    wti = have_wrong_type(ci,ti,ct,tt)
+    wti, wtt = have_wrong_type(ci,ti,ct,tt)
     # wti - wrong type ids, from cube_position
     # These are cubes away from the structure and the hollow points in the structure
     wpi, epi = get_wrong_cube_ids(ci,ct)
@@ -185,7 +191,7 @@ def have_wrong_type_ids_from_udp(udp:programmable_cubes_UDP):
     ci = udp.final_cube_positions
     ct = udp.target_cube_positions
     tt = udp.target_cube_types
-    wti = have_wrong_type(ci,ti,ct,tt)
+    wti, wtt = have_wrong_type(ci,ti,ct,tt)
     # wti - wrong type ids, from cube_position
     # These are cubes away from the structure and the hollow points in the structure
     wpi, epi = get_wrong_cube_ids(ci,ct)

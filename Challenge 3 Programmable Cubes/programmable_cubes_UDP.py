@@ -81,13 +81,14 @@ class programmable_cubes_UDP:
         # the chromosome exists solely of integer variables.
         return self.setup['max_cmds']*2+1
 
-    def fitness(self, chromosome, initial_configuration = None, verbose = False):
+    def fitness(self, chromosome, initial_configuration = None, verbose = False, cmd_offset = 0):
         """
         Fitness function for the UDP
         
         Args:
             chromosome: the chromosome/decision vector to be tested
             verbose: whether to provide more additional output during chromosome evaluation
+            + cmd_offset: used when evaluate fitness correctly from non initial configuration with partial chromosome
         Returns:
             score: the score/fitness for this chromosome.
         """
