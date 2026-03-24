@@ -4,4 +4,5 @@
 *.pyc
 *.gif
 Challenge*/*.npy
-
+out
+ch.npy

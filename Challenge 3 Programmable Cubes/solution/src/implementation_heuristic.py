@@ -8,20 +8,22 @@ from solution.src.pairing import *
 
 ## Final function for finding chromosomes
 
-def find_chromosome(udp:programmable_cubes_UDP,pairing : callable = pair_colours, pathfinding=astar_cubes,budget=np.inf,random_shuffle=False,verbose=False):
+def find_chromosome(udp:programmable_cubes_UDP,pairing : callable = pair_colours, pathfinding=astar_cubes,budget=np.inf,random_shuffle=False,verbose=True,move_only_freeroaming_cubes_at_target_position = False):
     # Initialize cubes
     cubes = ProgrammableCubes(udp.final_cube_positions)
+    cubes_target = ProgrammableCubes(udp.target_cube_positions)
     ti = udp.initial_cube_types
     ci = udp.final_cube_positions
     ct = udp.target_cube_positions
     tt = udp.target_cube_types
+    
     types = np.arange(np.max(ti)+1)
 
     # Initialize outputs
     chrom = []
     #path = []
     iter = 0
-    ESCAPE = 5
+    ESCAPE = 1
     placed_stat = []
     successes = 0
     while len(chrom) < udp.get_nix() and iter < ESCAPE:
@@ -39,6 +41,15 @@ def find_chromosome(udp:programmable_cubes_UDP,pairing : callable = pair_colours
         wi, wt = get_wrong_cube_ids(cubes.cube_position,ct)
         wi = np.concatenate([wrong_type_ids1,wi])
         wt = np.concatenate([wt,wrong_type_ids2])
+
+        # QUICK ADDITION:
+        # movement of cubes which are at target config have only 1 neighbour and are as such not necessary to be there from the start
+        if move_only_freeroaming_cubes_at_target_position:
+            wi = get_freeroaming_cubes_at_target_configuration(cubes,cubes_target)
+            np.random.shuffle(wi)
+            wi = wi[:len(wt)]
+
+
         assert(len(wi) == len(wt)) # otherwise unsolvable
         # Pair them
         src_dest_all = pairing(wi,wt,cubes.cube_position,ti,ct,tt)
@@ -253,6 +264,7 @@ def get_bridge_coords(cubes:ProgrammableCubes,stuck_id):
     except:
         pass
     direction_of_bridge = direction_of_bridge*np.random.randint(1,3) # choose direction of bridge wrt the plane
+    direction_of_bridge = np.random.randint(1,6) # TURNED ON, RANDOM BRIDGE DIRECTION
     
     bridge_coords = get_relative_bridge_coords(direction_of_bridge) + stuck_position
     return bridge_coords
@@ -266,7 +278,11 @@ def create_bridge(cubes:ProgrammableCubes,stuck_id,bridge_cubes_ids):
     bridge_coords = get_bridge_coords(cubes,stuck_id)
 
     #freeroaming = get_freeroaming_cubes(cubes,np.arange(len(cubes.cube_position)))
-    #found_bridge_pieces = 
+    cant_move_freeroaming_cube_counter = 0
+    found_bridge_pieces = 0 
+    for c in bridge_coords:
+        if contains_coord(cubes.cube_position,c) != -1:
+            found_bridge_pieces += 1
     for i in range(len(bridge_cubes_ids)):
         tmp_chrom, end, success = dijkstra_cubes_multiple(cubes,bridge_cubes_ids[i],bridge_coords)
         #try:# For when there is not enough freeroaming cubes
@@ -276,8 +292,47 @@ def create_bridge(cubes:ProgrammableCubes,stuck_id,bridge_cubes_ids):
         if success:
             cubes.apply_chromosome(end_chromosome(tmp_chrom),True)
             chrom = np.concatenate([chrom,tmp_chrom])
+            found_bridge_pieces += 1
         else:
-            #print("cant move freeroaming cube")
+            print("cant move freeroaming cube")
+            cant_move_freeroaming_cube_counter += 1
+            #break
+        if found_bridge_pieces == len(bridge_coords):
+            break
+        if cant_move_freeroaming_cube_counter > MAX_BRIDGE_CANT_MOVE:
+            break
+    return chrom
+
+MAX_BRIDGE_CANT_MOVE = 50
+
+def move_subset_of_cubes_to_set_of_coordinates(cubes:ProgrammableCubes,subset_cubes_ids,target_coordinates):
+    """
+    TODO: make create bridge just call this function
+    """
+    chrom = np.array([])
+    #freeroaming = get_freeroaming_cubes(cubes,np.arange(len(cubes.cube_position)))
+    cant_move_freeroaming_cube_counter = 0
+    filled_coordinates = 0 
+    for c in target_coordinates:
+        if contains_coord(cubes.cube_position,c) != -1:
+            filled_coordinates += 1
+    for i in range(len(subset_cubes_ids)):
+        tmp_chrom, end, success = dijkstra_cubes_multiple(cubes,subset_cubes_ids[i],target_coordinates)
+        #try:# For when there is not enough freeroaming cubes
+        #except:
+        #    print("ended early, not enough freeroaming cubes")
+        #    return chrom
+        if success:
+            cubes.apply_chromosome(end_chromosome(tmp_chrom),True)
+            chrom = np.concatenate([chrom,tmp_chrom])
+            filled_coordinates += 1
+        else:
+            print("cant move freeroaming cube")
+            cant_move_freeroaming_cube_counter += 1
+            #break
+        if filled_coordinates == len(target_coordinates):
+            break
+        if cant_move_freeroaming_cube_counter > MAX_BRIDGE_CANT_MOVE:
             break
     return chrom
 
@@ -290,7 +345,24 @@ def unstuck_cube_using_bridge(cubes:ProgrammableCubes,stuck_id:int,bridge_cubes_
     #     print("Cant move even with bridge")
     return chrom
 
-def run_removal_of_stuck_cubes_on_udp(udp:programmable_cubes_UDP, max_tries = 5, use_also_on_cubes_at_wrong_place = False,verbose=False):
+def get_freeroaming_cubes_at_target_configuration(cubes : ProgrammableCubes, cubes_target : ProgrammableCubes):
+    """
+    returns cubes indeces of cubes that are at a specified target location with only 1 neighbour
+    this means that they can be freely moved over the structure before returning (or being replaced)
+    
+    """
+    freeroaming_from_target = get_freeroaming_cubes(cubes_target,np.arange(len(cubes.cube_position)))
+    has_one_neighbour = get_freeroaming_cubes(cubes,np.arange(len(cubes.cube_position)))
+    which_are_at_freeroaming_of_target = np.array([contains_coord(cubes.cube_position,cubes_target.cube_position[freeroaming_from_target[i]]) for i in range(len(freeroaming_from_target))],dtype=int)
+    freeroaming, idx_a, idx_b = np.intersect1d(has_one_neighbour, which_are_at_freeroaming_of_target, return_indices=True)
+    return freeroaming
+
+
+
+def run_removal_of_stuck_cubes_on_udp(udp:programmable_cubes_UDP, max_tries = 5, use_also_on_cubes_at_wrong_place = False,
+                                      pathfinding=astar_cubes,
+                                      verbose=False,
+                                      pathfinding_for_target_cube=astar_cubes):
     ci = np.array(udp.final_cube_positions)
     chrom = []
     cubes = ProgrammableCubes(udp.final_cube_positions)
@@ -304,24 +376,30 @@ def run_removal_of_stuck_cubes_on_udp(udp:programmable_cubes_UDP, max_tries = 5,
     freeroaming_from_target = get_freeroaming_cubes(cubes_target,np.arange(len(cubes.cube_position)))
     
     while len(stuck) > 0 and iter < max_tries:
-        chosen_id = stuck[np.random.randint(0,len(stuck))]
+        chosen_id = stuck[np.random.randint(0,len(stuck))]        
         if verbose:
             print(f"Trying to unstuck {chosen_id} with neigbours {cubes.cube_neighbours[chosen_id]}")
         iter += 1
 
+        if len(cubes.cube_neighbours[chosen_id]) >= 5:
+            for id in np.array(cubes.cube_neighbours[chosen_id]):
+                move = force_random_move(id,cubes,chosen_id+id+iter)
+                if move != -1:
+                    chrom = np.concatenate([chrom,[id,move]])
+            udp.fitness(end_chromosome(chrom),ci)
+        else:
+            has_one_neighbour = get_freeroaming_cubes(cubes,np.arange(len(cubes.cube_position)))
+            which_are_at_freeroaming_of_target = np.array([contains_coord(cubes.cube_position,cubes_target.cube_position[freeroaming_from_target[i]]) for i in range(len(freeroaming_from_target))],dtype=int)
+            freeroaming, idx_a, idx_b = np.intersect1d(has_one_neighbour, which_are_at_freeroaming_of_target, return_indices=True)
 
-        has_one_neighbour = get_freeroaming_cubes(cubes,np.arange(len(cubes.cube_position)))
-        which_are_at_freeroaming_of_target = np.array([contains_coord(cubes.cube_position,cubes_target.cube_position[freeroaming_from_target[i]]) for i in range(len(freeroaming_from_target))],dtype=int)
-        freeroaming, idx_a, idx_b = np.intersect1d(has_one_neighbour, which_are_at_freeroaming_of_target, return_indices=True)
+            #freeroaming = np.union1d(freeroaming, wrong_place_ids)
+            #np.random.shuffle(freeroaming)
 
-        #freeroaming = np.union1d(freeroaming, wrong_place_ids)
-        #np.random.shuffle(freeroaming)
-
-        chrom = np.concatenate([chrom,unstuck_cube_using_bridge(cubes,chosen_id,freeroaming)])
+            chrom = np.concatenate([chrom,unstuck_cube_using_bridge(cubes,chosen_id,freeroaming)])
 
         udp.fitness(end_chromosome(chrom),ci)
         #udp.plot("ensemble",types)
-        chrom = np.concatenate([chrom,find_chromosome_heuristic(udp)])
+        chrom = np.concatenate([chrom,find_chromosome(udp,pathfinding=pathfinding)])
         # reset stuck cubes
         udp.fitness(end_chromosome(chrom),ci)
         wrong_type_ids, wrong_place_ids  = have_wrong_type_ids_from_udp(udp)
@@ -333,6 +411,7 @@ def run_removal_of_stuck_cubes_on_udp(udp:programmable_cubes_UDP, max_tries = 5,
     
     #print(len(chrom),udp.fitness(end_chromosome(chrom)))
     return chrom
+
 
 
 
@@ -378,16 +457,32 @@ def fill_empty_space_with_type(cubes:ProgrammableCubes,cube_types,coord,type,chr
     print("found none")
     return np.array([],dtype=int),False
 
-def fill_empty_space_using_bridge(cubes:ProgrammableCubes,cube_types,coord,type,chrom,recursion=0):
+def astar_with_bridge(cubes : ProgrammableCubes, id:int, c:np.ndarray, budget:int = np.inf):
     """
     experimental, not finished
     This method always edits the cubes variable
     
     """
-    same_type_ids = np.where(cube_types == type)[0]
-    coords = get_relative_bridge_coords(random.randint(0,5)) + coord
-    # TODO
+    print(f"moving {id} to {c}")
+    # Solvable just by A*
+    chrom, ok = astar_cubes(cubes,id,c)
+    if ok:
+        return chrom, True
+    
 
+    # Needs help from another method
+    freeroaming_ids = get_freeroaming_cubes(cubes,range(len(cubes.cube_position)))
+    random.shuffle(freeroaming_ids)
+    coords = get_relative_bridge_coords(np.random.randint(0,6)) + c
+    # TODO
+    previous_cubes = np.array(cubes.cube_position) # INEFFICIENCY
+
+    chrom = move_subset_of_cubes_to_set_of_coordinates(cubes,freeroaming_ids,coords)
+    tmp_chrom, ok = astar_cubes(cubes,id,c)
+    
+    cubes = ProgrammableCubes(previous_cubes)
+
+    return np.array(np.concatenate([chrom,tmp_chrom]),dtype=int),True
 
 
 

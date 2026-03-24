@@ -1,5 +1,6 @@
 import numpy as np
 from numba import njit
+import random
 from programmable_cubes_UDP import ProgrammableCubes
 from programmable_cubes_UDP import programmable_cubes_UDP
 
@@ -49,6 +50,32 @@ def force_random_move(id:int,cubes:ProgrammableCubes,rand : int = 0) -> int:
             return i
     return -1
 
+def force_random_move_recursive(id:int,cubes:ProgrammableCubes,recursion:int = 0) -> int:
+    """
+    Experiment: does not work
+    """
+    chrom = []
+    if recursion > 10:
+        chrom.extend([-1,-1])
+    # try to move
+    for i in ROTS:
+        res = cubes.apply_single_update_step(id,i)
+        if res == 1:
+            chrom.extend([id,i]) # end if success
+            return chrom
+    # 
+    neighbours = cubes.cube_neighbours[id]
+    recursive_result = force_random_move_recursive(random.randint(0,len(neighbours-1)),cubes,recursion+1)
+    if recursive_result[-1] != -1:
+        self_recursive_result = force_random_move_recursive(id,cubes,recursion+1)
+        if self_recursive_result[-1] != -1:
+            out_chrom = []
+            out_chrom.extend(recursive_result)
+            out_chrom.extend(self_recursive_result)
+            return out_chrom
+    chrom.extend([-1,-1])
+    return chrom
+
 DIRS = np.array([[1,0,0],[-1,0,0],[0,1,0],[0,-1,0],[0,0,1],[0,0,-1]])
 def is_connected(c:np.ndarray,positions:np.ndarray):
     """
@@ -88,6 +115,9 @@ def have_wrong_type(pos1,type1,pos2,type2):
 def get_wrong_cube_ids(pos1:np.ndarray,pos2:np.ndarray):
     """
     does not include color
+
+    pos1_ids - ids in array pos1 which are not included in pos2 array
+    pos2_ids - ids of pos2 with symmetric relation
     """
     arr, cnt = np.unique(np.concat([pos1,pos2]), axis=0, return_counts=True)
     wrong = arr[cnt==1]
@@ -126,7 +156,10 @@ def get_first_and_second_mistakes(udp):
     return wpi, wti
 def analyze_first_and_second_mistakes(udp):
     wpi, wti = get_first_and_second_mistakes(udp)
-    return f"mistakes:{len(wpi)}+{len(wti)}"
+    out = f"mistakes:{len(wpi)}+{len(wti)}"
+    if len(wpi) + len(wti) < 10:
+        out+=f"|{wpi},{wti}"
+    return out
 
 def is_stuck(cubes,id):
     return get_valid_rots(id,cubes) == []
@@ -141,7 +174,7 @@ def get_stuck_wrong_cubes(cubes:ProgrammableCubes,wrong_ids:np.ndarray):
 
 def get_freeroaming_cubes(cubes:ProgrammableCubes,ids:np.ndarray):
     """
-    
+    returns a set of ids in cubes which have 1 neighbour and can "probably" move freely 
     """
     freeroaming_ids = []
     for id in ids:

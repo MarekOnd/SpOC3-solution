@@ -295,7 +295,7 @@ def axis_search_always_move(cubes : ProgrammableCubes, id:int, c:np.ndarray, bud
     c2 = c
     # Speedups
     if not is_connected(c2,cubes.cube_position):
-        return [],[],False
+        return [],False
     
     # Main loop
     while np.sum(c1 == c2) != 3 and len(chrom) < budget:
@@ -455,7 +455,7 @@ def empty_pathfinding(cubes : ProgrammableCubes,id,c,budget):
     moves_start.reverse()
     for move_start in moves_start:
         if move_start[1] != -1:
-            print(move_start)
+            #print(move_start)
             cubes.apply_single_update_step(int(move_start[0]),inv_rot(move_start[1]))
     return np.array([]),False
 
@@ -473,6 +473,7 @@ def brute_force_move_to(cubes: ProgrammableCubes, id:int, c:np.ndarray, budget:i
     # step 2: apply random movements until astar possible or max attempts
     num_cubes = len(cubes.cube_position)
     candidates = [i for i in range(num_cubes) if i != id]
+    random.shuffle(candidates)
     #candidates = list(cubes.cube_surroundings[id])
 
     for attempt in range(max_attempts):
@@ -513,3 +514,90 @@ def brute_force_move_to(cubes: ProgrammableCubes, id:int, c:np.ndarray, budget:i
 
     cubes.apply_update_at_position(id, start)
     return np.array([], dtype=int), False
+
+
+def brute_force_move_to_neighbourhoods(cubes: ProgrammableCubes, id:int, c:np.ndarray, budget:int=np.inf, max_attempts:int=100, max_moves:int=5):
+    """
+    Forcing astar by applying random sample of rotations and trying astar
+    """
+    start = np.array(cubes.cube_position[id], dtype=int)
+
+    # step 1: try astar
+    chrom, ok = astar_cubes(cubes, id, c, budget)
+    if ok:
+        return chrom, True
+
+    # step 2: apply random movements until astar possible or max attempts
+
+    start = np.array(cubes.cube_position[id])
+    surroundings_start = np.array(cubes.cube_surroundings[id])
+    cubes.apply_update_at_position(id,c)
+    surroundings_end = np.array(cubes.cube_surroundings[id])
+    cubes.apply_update_at_position(id,start)
+    random.shuffle(surroundings_start)
+    random.shuffle(surroundings_end)
+    surroundings = np.concatenate([surroundings_start,surroundings_end])
+    candidates = list(surroundings)
+
+    for attempt in range(max_attempts):
+        if len(candidates) == 0:
+            break
+        picks = random.sample(candidates, min(max_moves, len(candidates)))
+        applied = []
+
+        for mover in picks:
+            rot = force_random_move(mover, cubes)
+            if rot != -1:
+                applied.append((mover, int(rot)))
+
+        if len(applied) == 0:
+            continue
+
+        # try A* after these relocations
+        tmp_chrom, ok = astar_cubes(cubes, id, c, budget)
+        if ok:
+            # print(f"Moved {id} to {c}")
+            # build forward/backward chromosomes
+            forward = np.array([x for pair in applied for x in pair], dtype=int)
+            back_pairs = [(m, inv_rot(r)) for (m, r) in reversed(applied)]
+            backward = np.array([x for pair in back_pairs for x in pair], dtype=int)# maybe dont do the backward chromosome here
+
+            # revert physical moves now
+            for mover, rot in reversed(applied):
+                cubes.apply_single_update_step(mover, inv_rot(rot))
+
+            full = np.concatenate([forward, tmp_chrom,backward])
+            cubes.apply_update_at_position(id, start)
+            return full, True
+
+        # revert applied moves and restore cube id position
+        for mover, rot in reversed(applied):
+            cubes.apply_single_update_step(mover, inv_rot(rot))
+        cubes.apply_update_at_position(id, start)
+
+    cubes.apply_update_at_position(id, start)
+    return np.array([], dtype=int), False
+
+
+def force_random_move_pathfinding(cubes : ProgrammableCubes, id:int, c:np.ndarray, budget:int = np.inf,heur = manhattan):
+    """
+    moves cube 1 time randomly if possible and returns pathfinding format
+    """
+    start = np.array(cubes.cube_position[id])
+    # Initialize variables
+    chrom = []
+    path = []
+    c1 = cubes.cube_position[id]
+    c2 = c
+    # Speedups
+    if not is_connected(c2,cubes.cube_position):
+        return [],[],False
+    
+    rot = force_random_move(id, cubes)
+    if rot != -1:
+        return [id,rot], True
+    return chrom,False
+
+
+
+
