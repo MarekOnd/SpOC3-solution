@@ -1,3 +1,11 @@
+## ! Disclaimer !
+
+This repository contains a solution for the problem posed by ESA.
+
+The repository which was forked is located at https://github.com/esa/SpOC3.
+
+---
+
 <image src="../images/cubes.png" align="center" alt="Challenge 3: Programmable Cubes"/>
 
 # Challenge 3: Programmable Cubes

@@ -1,3 +1,12 @@
+## ! Disclaimer !
+
+This repository contains a solution for the problem posed by ESA.
+
+The repository which was forked is located at https://github.com/esa/SpOC3.
+
+---
+
+
 For the third time, the European Space Agency's Advanced Concepts Team
 (ACT) presents in cooperation with the [The Genetic and Evolutionary
 Computation Conference
